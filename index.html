@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ですます変換</title>
+</head>
+
+<body>
+    <script src="https://cdn.jsdelivr.net/npm/vue"></script>
+    <div id="app" class="f1">
+        <div class="f2">
+            <div id="mae" class="f3">
+                元の文（変換ボタンを押すと変換）
+                <form>
+                    <textarea id="source" rows="10" class="area" v-model="source"></textarea>
+                    <br>
+                </form>
+            </div>
+            <p class="f3">
+                <button class="hyoubutton" v-on:click="convert">変換</button>
+            </p>
+            <div id="out" class="f3" contenteditable="true">
+                変換後の文（変更したい部分をドラッグして選択）
+                <textarea rows="10" class="area" v-on:select="selectEvent">{{ output }}</textarea>
+            </div>
+        </div>
+        <!-- <button v-on:click="openModal">追加</button> -->
+        <!-- <label v-for="label in options">
+            <input type="radio" v-model="current" v-bind:value="label.value">
+            {{ label.label }}
+        </label> -->
+        <div id="hyou" class="f4">
+            <table>
+                <thead>
+                    <tr>
+                        <!-- <th class="id">ID</th> -->
+                        <th class="state"></th>
+                        <th class="before">変換前</th>
+                        <th> </th>
+                        <th class="comment">変換後</th>
+                        <th class="button"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="item in computedPairs" v-bind:key="item.id">
+                        <!-- <th>{{ item.id }}</th> -->
+                        <td class="state">
+                            <input type="checkbox" value="valid" v-on:click="doChangeState(item)" checked>
+                        </td>
+                        <td><input class="text" v-model="item.before"></td>
+                        <td>⇒</td>
+                        <td><input class="text" v-model="item.comment"></td>
+                        <td class="button">
+                            <button id="sakujo" v-on:click="doRemove(item)">削除</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            {{ computedPairs.length }}件の変換
+        </div>
+        <div id="overlay" v-show="showContent">
+            <form id="content" class="add-form">
+                <p>変換前：{{ selectedStr }}</p>
+                変換後：<input type="text" class="text" ref="comment" v-model="word">
+                <div class="text_underline"></div>
+                <p>
+                    <button class="hyoubutton" v-on:click.prevent="doAdd">追加</button>
+                    <button class="hyoubutton" v-on:click.prevent="closeModal">×</button>
+                </p>
+            </form>
+        </div>
+    </div>
+    <script>
+        var STORAGE_KEY = 'pairs-vuejs-demo'
+        var pairStorage = {
+            fetch: function () {
+                var pairs = JSON.parse(
+                    localStorage.getItem(STORAGE_KEY) || '[]'
+                )
+                pairs.forEach(function (pair, index) {
+                    pair.id = index
+                })
+                pairStorage.uid = pairs.length
+                return pairs
+            },
+            save: function (pairs) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(pairs))
+            }
+        }
+
+        new Vue({
+            el: '#app',
+            data: {
+                source: "原文",
+                output: "変換後",
+                index: 0,
+                selectedStr: 'a',
+                showContent: false,
+                word: "",
+                pairs: [],
+                options: [
+                    { value: -1, label: "すべて" },
+                    { value: 0, label: "valid" },
+                    { value: 1, label: "invalid" }
+                ],
+                current: -1
+            },
+            methods: {
+                convert: function () {
+                    var tmp = this.source.replace(/(です)/g, "だ");
+                    tmp = tmp.replace(/(します)/g, "する");
+                    tmp = tmp.replace(/(ました)/g, "た");
+                    for (pair in this.computedPairs) {
+                        if (this.computedPairs[pair].state == 0) {
+                            var re = new RegExp(this.computedPairs[pair].before, "g");
+                            tmp = tmp.replace(re, this.computedPairs[pair].comment)
+                        }
+                    }
+                    this.output = tmp;
+                    this.showContent = false;
+                },
+                selectEvent: function (event) {
+                    this.selectedStr = window.getSelection().toString();
+                    this.showContent = true;
+                },
+                // openModal: function () {
+                //     this.showContent = true
+                // },
+                closeModal: function () {
+                    this.showContent = false;
+                },
+                doAdd: function (event, value) {
+                    var comment = this.$refs.comment
+                    if (comment.value.length == 0) {
+                        this.showContent = false;
+                        return
+                    }
+                    this.pairs.push({
+                        id: pairStorage.uid++,
+                        before: this.selectedStr,
+                        comment: comment.value,
+                        state: 0
+                    })
+                    comment.value = '';
+                    this.word = '';
+                    this.showContent = false;
+                },
+                doChangeState: function (item) {
+                    item.state = item.state ? 0 : 1
+                },
+                doRemove: function (item) {
+                    var index = this.pairs.indexOf(item)
+                    this.pairs.splice(index, 1)
+                }
+            },
+            watch: {
+                pairs: {
+                    handler: function (pairs) {
+                        pairStorage.save(pairs)
+                        var tmp = this.source.replace(/(です)/g, "だ");
+                        tmp = tmp.replace(/(します)/g, "する");
+                        tmp = tmp.replace(/(ました)/g, "た");
+                        for (pair in this.computedPairs) {
+                            if (this.computedPairs[pair].state == 0) {
+                                var re = new RegExp(this.computedPairs[pair].before, "g");
+                                tmp = tmp.replace(re, this.computedPairs[pair].comment)
+                            }
+                        }
+                        this.output = tmp;
+                    },
+                    deep: true
+                }
+            },
+            computed: {
+                selectedStr: function () {
+                    return this.selectedStr;
+                },
+                computedPairs: function () {
+                    return this.pairs.filter(function (el) {
+                        return this.current < 0 ? true : this.current === el.state
+                    }, this)
+                },
+                labels: function () {
+                    return this.options.reduce(function (a, b) {
+                        return Object.assign(a, { [b.value]: b.label })
+                    }, {})
+                }
+            },
+            created() {
+                this.pairs = pairStorage.fetch();
+            }
+        })
+    </script>
+    <style>
+        .f1 {
+            display: flex;
+            flex-direction: row;
+        }
+
+        .f2 {
+            display: flex;
+            flex-direction: column;
+            flex-basis: 70%;
+        }
+
+        .f4 {
+            display: flex;
+            flex-direction: column;
+            flex-basis: 30%;
+        }
+
+        #overlay {
+            /*　要素を重ねた時の順番　*/
+            z-index: 1;
+
+            /*　画面全体を覆う設定　*/
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+
+            /*　画面の中央に要素を表示させる設定　*/
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+        }
+
+        #content {
+            z-index: 2;
+            width: 50%;
+            padding: 1em;
+            background: #fff;
+        }
+
+        #mae form textarea {
+            color: #205dad;
+            border: solid 3px #bdd5f3;
+            background-color: #bdd5f3;
+            border-radius: 10px;
+            box-shadow: 0 3px 5px rgb(126, 126, 126);
+        }
+
+        #mae {
+            color: #205dad;
+        }
+
+        #out textarea {
+            color: #ad2072;
+            border: solid 3px #f3bdd8;
+            background-color: #f3bdd8;
+            border-radius: 10px;
+            box-shadow: 0 3px 5px rgb(126, 126, 126);
+        }
+
+        #out {
+            color: #ad2072;
+        }
+
+        #hyou {
+            color: #949619;
+            border: solid 3px #e5f0a7;
+            background-color: #e5f0a7;
+            border-radius: 10px;
+            box-shadow: 0 3px 5px rgb(126, 126, 126);
+        }
+
+        button {
+            border-color: #0099e4;
+            border-radius: 20px;
+            line-height: 24px;
+            padding: 0 8px;
+            background: #ffffff;
+            color: #0099e4;
+            cursor: pointer;
+        }
+
+        .hyoubutton,
+        #sakujo {
+            border-color: #949619;
+            border-radius: 20px;
+            line-height: 24px;
+            padding: 0 8px;
+            background: #ffffff;
+            color: #949619;
+            cursor: pointer;
+        }
+
+        .hyoubutton {
+            size: 500%;
+            /* position: relative;
+            right: 50%; */
+        }
+
+        .batsu {
+            border: none;
+            border-radius: 20px;
+            line-height: 24px;
+            padding: 0 8px;
+            background: #ff0000;
+            color: #ffffff;
+            cursor: pointer;
+        }
+
+        .text {
+            font-size: 16px;
+            width: 100%;
+            border: none;
+            outline: none;
+            padding-bottom: 8px;
+            box-sizing: border-box;
+        }
+
+        .text_underline {
+            position: relative;
+            border-top: 1px solid #949619;
+        }
+
+        .area {
+            resize: horizontal;
+            max-width: 100%;
+            min-width: 95%;
+        }
+
+        .f1 div p {
+            size: 500%
+        }
+    </style>
+</body>
+
+</html>
